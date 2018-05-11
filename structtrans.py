@@ -1,0 +1,168 @@
+#!/usr/bin/env python3
+import xml.etree.ElementTree
+import argparse
+from collections import defaultdict
+import json
+parser = argparse.ArgumentParser(description='Generate human-readable summaries of Apertium structural transfer rules and bilingual dictionaries.')
+files = parser.add_mutually_exclusive_group(required=True)
+files.add_argument('-f', '--files', type=str, nargs=4, metavar=('chunker', 'interchunk', 'postchunk', 'dix'))
+files.add_argument('-d', '--dir', type=str, metavar='datadir')
+parser.add_argument('langs', type=str)
+parser.add_argument('-o', '--outfile', type=str)
+args = parser.parse_args()
+if args.dir:
+    name = '%s/apertium-%s.%s.' % (args.dir, args.langs, args.langs)
+    CH = xml.etree.ElementTree.parse(name+'t1x').getroot()
+    ICH = xml.etree.ElementTree.parse(name+'t2x').getroot()
+    PCH = xml.etree.ElementTree.parse(name+'t3x').getroot()
+    DIX = xml.etree.ElementTree.parse(name+'dix').getroot()
+else:
+    CH = xml.etree.ElementTree.parse(args.chunkerfile).getroot()
+    ICH = xml.etree.ElementTree.parse(args.interchunkfile).getroot()
+    PCH = xml.etree.ElementTree.parse(args.postchunkfile).getroot()
+    DIX = xml.etree.ElementTree.parse(args.dixfile).getroot()
+
+Tags = {}
+for t in DIX.findall('./sdefs/sdef'):
+    if 'n' in t.attrib:
+        if 'c' in t.attrib:
+            Tags[t.attrib['n']] = t.attrib['c']
+        else:
+            Tags[t.attrib['n']] = None
+def listify(doc, path, alt=None):
+    ret = {}
+    for cat in doc.findall('./section-def-%ss/%s' % (path, alt or 'def-'+path)):
+        ret[cat.attrib['n']] = []
+        for it in cat:
+            ret[cat.attrib['n']].append(it.attrib)
+    return ret
+Cats1 = listify(CH, 'cat')
+Cats2 = listify(ICH, 'cat')
+Cats3 = listify(PCH, 'cat')
+Attrs1 = listify(CH, 'attr')
+Attrs2 = listify(ICH, 'attr')
+Attrs3 = listify(PCH, 'attr')
+Lists1 = listify(CH, 'list', 'list-item')
+Lists2 = listify(ICH, 'list', 'list-item')
+Lists3 = listify(PCH, 'list', 'list-item')
+Vars1 = [v.attrib for v in CH.findall('./section-def-vars/def-var')]
+Vars2 = [v.attrib for v in ICH.findall('./section-def-vars/def-var')]
+Vars3 = [v.attrib for v in PCH.findall('./section-def-vars/def-var')]
+# TODO: macros
+class Action:
+    def __init__(self, xml):
+        self.tag = xml.tag
+        self.attrib = xml.attrib
+        self.children = [Action(x) for x in xml]
+    def html(self):
+        cls = 'act '+self.tag
+        span = '<span>%s</span>' % self.tag
+        kids = [c.html() for c in self.children]
+        attr = json.dumps(self.attrib).replace('"', '&quot;').replace("'", '&apos;')
+        if self.tag == "action":
+            pass
+        elif self.tag == "and":
+            pass
+        elif self.tag == "append":
+            pass
+        elif self.tag == "b":
+            span = '<span>Space</span>'
+        elif self.tag == "begins-with":
+            pass
+        elif self.tag == "begins-with-list":
+            pass
+        elif self.tag == "call-macro":
+            pass
+        elif self.tag == "case-of":
+            pass
+        elif self.tag == "choose":
+            pass
+        elif self.tag == "chunk":
+            pass
+        elif self.tag == "clip":
+            pass
+        elif self.tag == "concat":
+            pass
+        elif self.tag == "contains-substring":
+            pass
+        elif self.tag == "ends-with":
+            pass
+        elif self.tag == "ends-with-list":
+            pass
+        elif self.tag == "equal":
+            pass
+        elif self.tag == "get-case-from":
+            pass
+        elif self.tag == "in":
+            pass
+        elif self.tag == "let":
+            pass
+        elif self.tag == "list":
+            pass
+        elif self.tag == "lit":
+            pass
+        elif self.tag == "lit-tag":
+            pass
+        elif self.tag == "lu":
+            pass
+        elif self.tag == "mlu":
+            pass
+        elif self.tag == "modify-case":
+            pass
+        elif self.tag == "not":
+            pass
+        elif self.tag == "or":
+            pass
+        elif self.tag == "otherwise":
+            pass
+        elif self.tag == "out":
+            pass
+        elif self.tag == "reject-current-rule":
+            pass
+        elif self.tag == "tag":
+            pass
+        elif self.tag == "tags":
+            pass
+        elif self.tag == "test":
+            pass
+        elif self.tag == "var":
+            pass
+        elif self.tag == "when":
+            pass
+        elif self.tag == "with-param":
+            pass
+        return '<div class="%s" data-attrs="%s">%s\n%s</div>' % (cls, attr, span, '\n'.join(kids))
+class Rule:
+    def __init__(self, xml):
+        self.pattern = [p.attrib['n'] for p in xml.findall('./pattern/pattern-item')]
+        self.action = Action(xml.find('./action'))
+        self.attrib = xml.attrib
+    def html(self):
+        return '<div class="rule"><ul><li>%s</li></ul>%s</div>' % ('</li><li>'.join(self.pattern), self.action.html())
+Rules1 = [Rule(x) for x in CH.findall('./section-rules/rule')]
+Rules2 = [Rule(x) for x in ICH.findall('./section-rules/rule')]
+Rules3 = [Rule(x) for x in PCH.findall('./section-rules/rule')]
+fname = args.outfile or args.langs + '-struct-trans.html'
+print('Writing to %s' % fname)
+f = open(fname, 'w')
+html = '''<html><head>
+<title>Structural Transfer Summary for %s</title>
+<style>
+span { padding: 5px; }
+.act {
+    padding-left: 5px;
+    border: 1px solid black;
+    width: -webkit-max-content;
+    width: -moz-max-content;
+    width: max-content;
+    border-radius: 10px;
+}
+</style>
+</head>
+<body>
+<h1>Chunker</h1>%s
+<h1>Interchunk</h1>%s
+<h1>Postchunk</h1>%s
+</body></html>''' % (args.langs, '\n'.join([x.html() for x in Rules1]), '\n'.join([x.html() for x in Rules2]), '\n'.join([x.html() for x in Rules3]))
+f.write(html)
+f.close()
