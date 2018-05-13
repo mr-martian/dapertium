@@ -49,16 +49,46 @@ Vars1 = [v.attrib for v in CH.findall('./section-def-vars/def-var')]
 Vars2 = [v.attrib for v in ICH.findall('./section-def-vars/def-var')]
 Vars3 = [v.attrib for v in PCH.findall('./section-def-vars/def-var')]
 # TODO: macros
+class HtmlTag:
+    def __init__(self, tag, ID=None, cls=None, kids=None, attr=None):
+        self.tag = tag
+        self.ID = ID or ''
+        self.cls = cls or []
+        self.kids = kids or []
+        self.attr = attr or {}
+    def __str__(self):
+        i = 'id="%s"' % self.ID if self.ID else ''
+        c = 'class="%s"' % ' '.join(self.cls) if self.cls else ''
+        a = []
+        for k in self.attr:
+            a.append('%s="%s"' % (k, self.attr[k].replace('"', '&quot;').replace("'", '&apos;')))
+        k = [str(x) for x in self.kids]
+        return '<%s %s %s %s>%s</%s>' % (self.tag, i, c, ' '.join(a), '\n'.join(k), self.tag)
+    def __repr__(self):
+        return self.__str__()
+    def label(self, txt, loc=0):
+        self.kids.insert(loc, HtmlTag('span', kids=[txt]))
 class Action:
+    unique = 0
     def __init__(self, xml):
         self.tag = xml.tag
         self.attrib = xml.attrib
         self.children = [Action(x) for x in xml]
+    def json(self):
+        ret = self.attrib
+        ret['tag'] = self.tag
+        ch = []
+        for c in self.children:
+            if isinstance(c, str):
+                ch.append(c)
+            else:
+                ch.append(c.json())
+        ret['children'] = ch
+        return ret
     def html(self):
-        cls = 'act '+self.tag
-        span = '<span>%s</span>' % self.tag
-        kids = [c.html() for c in self.children]
-        attr = json.dumps(self.attrib).replace('"', '&quot;').replace("'", '&apos;')
+        ret = HtmlTag('div', 'act%s' % Action.unique, ['act', self.tag], [c.html() for c in self.children], {'data-attrs':json.dumps(self.attrib)})
+        Action.unique += 1
+        span = self.tag
         if self.tag == "action":
             pass
         elif self.tag == "and":
@@ -66,7 +96,7 @@ class Action:
         elif self.tag == "append":
             pass
         elif self.tag == "b":
-            span = '<span>Space</span>'
+            span = 'Space'
         elif self.tag == "begins-with":
             pass
         elif self.tag == "begins-with-list":
@@ -90,19 +120,26 @@ class Action:
         elif self.tag == "ends-with-list":
             pass
         elif self.tag == "equal":
-            pass
+            span = ''
+            ret.cls.append('inline-kids')
+            ret.label('=', 1)
+            if 'caseless' in self.attrib and self.attrib['caseless'] == 'yes':
+                ret.kids.append('<br/><span>ignoring case</span>')
         elif self.tag == "get-case-from":
             pass
         elif self.tag == "in":
             pass
         elif self.tag == "let":
-            pass
+            span = ''
+            ret.cls.append('inline-kids')
+            ret.label('Set')
+            ret.label('to', 2)
         elif self.tag == "list":
             pass
         elif self.tag == "lit":
-            pass
+            return '<span class="lit"><b>%s</b></span>' % self.attrib['v']
         elif self.tag == "lit-tag":
-            pass
+            return '<span class="lit-tag"><b>&lt;%s&gt;</b></span>' % '&gt;&lt;'.join(self.attrib['v'].split('.'))
         elif self.tag == "lu":
             pass
         elif self.tag == "mlu":
@@ -124,21 +161,30 @@ class Action:
         elif self.tag == "tags":
             pass
         elif self.tag == "test":
-            pass
+            ret.cls = ['inline']
+            span = ''
         elif self.tag == "var":
-            pass
+            span = 'Variable <b>%s</b>' % self.attrib['n']
         elif self.tag == "when":
-            pass
+            span = ''
+            ret.label('If')
+            ret.kids.insert(2, '<br/><span>Then</span>')
         elif self.tag == "with-param":
             pass
-        return '<div class="%s" data-attrs="%s">%s\n%s</div>' % (cls, attr, span, '\n'.join(kids))
+        if span:
+            ret.label(span)
+        return ret
 class Rule:
     def __init__(self, xml):
         self.pattern = [p.attrib['n'] for p in xml.findall('./pattern/pattern-item')]
         self.action = Action(xml.find('./action'))
         self.attrib = xml.attrib
+    def json(self):
+        ret = self.attrib
+        ret.update({'pattern':self.pattern, 'action':self.action.json()})
+        return ret
     def html(self):
-        return '<div class="rule"><ul><li>%s</li></ul>%s</div>' % ('</li><li>'.join(self.pattern), self.action.html())
+        return '<div class="rule"><ul><li>%s</li></ul>%s</div>' % ('</li><li>'.join(self.pattern), str(self.action.html()))
 Rules1 = [Rule(x) for x in CH.findall('./section-rules/rule')]
 Rules2 = [Rule(x) for x in ICH.findall('./section-rules/rule')]
 Rules3 = [Rule(x) for x in PCH.findall('./section-rules/rule')]
@@ -149,6 +195,7 @@ html = '''<html><head>
 <title>Structural Transfer Summary for %s</title>
 <style>
 span { padding: 5px; }
+.inline-kids > .act, .inline { display: inline-block; }
 .act {
     padding-left: 5px;
     border: 1px solid black;
@@ -165,4 +212,32 @@ span { padding: 5px; }
 <h1>Postchunk</h1>%s
 </body></html>''' % (args.langs, '\n'.join([x.html() for x in Rules1]), '\n'.join([x.html() for x in Rules2]), '\n'.join([x.html() for x in Rules3]))
 f.write(html)
+f.close()
+js = {'tags':Tags,
+      'chunker':{'cats':Cats1,
+                 'attrs':Attrs1,
+                 'lists':Lists1,
+                 'vars':Vars1,
+                 #'macros':Macros1,
+                 'rules':[x.json() for x in Rules1]
+      },
+      'interchunk':{'cats':Cats2,
+                    'attrs':Attrs2,
+                    'lists':Lists2,
+                    'vars':Vars2,
+                    #'macros':Macros2,
+                    'rules':[x.json() for x in Rules2]
+      },
+      'postchunk':{'cats':Cats3,
+                  'attrs':Attrs3,
+                  'lists':Lists3,
+                  'vars':Vars3,
+                  #'macros':Macros3,
+                  'rules':[x.json() for x in Rules3]
+      }}
+f = open(args.outfile or args.langs + '-struct-trans-edit.html', 'w')
+f.write('''<html><head><style src="dapertium/structtrans.css"></style><script src="dapertium/structtrans.js"></script>
+<title>Structural Transfer Editor for %s</title>
+<script>var DATA = %s;</script>
+<body></body></html>''' % (args.langs, json.dumps(js)))
 f.close()
