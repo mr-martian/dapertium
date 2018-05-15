@@ -236,8 +236,16 @@ js = {'tags':Tags,
                   'rules':[x.json() for x in Rules3]
       }}
 f = open(args.outfile or args.langs + '-struct-trans-edit.html', 'w')
-f.write('''<html><head><style src="dapertium/structtrans.css"></style><script src="dapertium/structtrans.js"></script>
+f.write('''<html><head><link rel="stylesheet" href="dapertium/structtrans.css"></link><script src="dapertium/structtrans.js"></script>
 <title>Structural Transfer Editor for %s</title>
 <script>var DATA = %s;</script>
-<body></body></html>''' % (args.langs, json.dumps(js)))
+<body>
+<h1>Chunker</h1>
+<div id="chunker"></div>
+<h1>Interchunk</h1>
+<div id="interchunk"></div>
+<h1>Postchunk</h1>
+<div id="postchunk"></div>
+<script>setup();</script>
+</body></html>''' % (args.langs, json.dumps(js)))
 f.close()
