@@ -87,6 +87,10 @@ class Action:
         elif self.tag == 'lit-tag':
             r.tag = 'literal'
             r.attrib['istags'] = True
+        elif self.tag == 'rule':
+            r.attrib['pattern'] = r.children[0]
+            r.attrib['action'] = r.children[1]
+            r.children = []
         else:
             pass
         return r
@@ -113,11 +117,11 @@ class Rule:
         self.attrib = xml.attrib
     def json(self):
         ret = self.attrib
-        ret.update({'pattern':self.pattern, 'action':self.action.process().json()})
+        ret.update({'tag':'rule', 'pattern':self.pattern, 'action':self.action.process().json()})
         return ret
-Rules1 = [Rule(x) for x in CH.findall('./section-rules/rule')]
-Rules2 = [Rule(x) for x in ICH.findall('./section-rules/rule')]
-Rules3 = [Rule(x) for x in PCH.findall('./section-rules/rule')]
+Rules1 = [Action.fromxml(x) for x in CH.findall('./section-rules/rule')]
+Rules2 = [Action.fromxml(x) for x in ICH.findall('./section-rules/rule')]
+Rules3 = [Action.fromxml(x) for x in PCH.findall('./section-rules/rule')]
 fname = args.outfile or args.langs + '-struct-trans.html'
 print('Writing to %s' % fname)
 js = {'tags':Tags,
@@ -126,21 +130,21 @@ js = {'tags':Tags,
                  'lists':Lists1,
                  'vars':Vars1,
                  #'macros':Macros1,
-                 'rules':[x.json() for x in Rules1]
+                 'rules':[x.process().json() for x in Rules1]
       },
       'interchunk':{'cats':Cats2,
                     'attrs':Attrs2,
                     'lists':Lists2,
                     'vars':Vars2,
                     #'macros':Macros2,
-                    'rules':[x.json() for x in Rules2]
+                    'rules':[x.process().json() for x in Rules2]
       },
       'postchunk':{'cats':Cats3,
                   'attrs':Attrs3,
                   'lists':Lists3,
                   'vars':Vars3,
                   #'macros':Macros3,
-                  'rules':[x.json() for x in Rules3]
+                  'rules':[x.process().json() for x in Rules3]
       }}
 f = open(fname, 'w')
 f.write('''<html><head><link rel="stylesheet" href="dapertium/structtrans.css"></link><script src="dapertium/structtrans.js"></script>

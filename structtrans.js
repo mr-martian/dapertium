@@ -1,11 +1,8 @@
 /*
 TODO:
-patterns
 vars, macros, lists, attrs, cats
-append, out, modify-case, mlu, lu, chunk, tags, tag
+append, modify-case, mlu, lu, chunk, tags, tag
 update dropdowns
-dom -> json
-output xml
 validate
 improve labels?
 interpret rules?
@@ -138,7 +135,7 @@ var actionHolder = function(contain, count, json, prop, pass) {
       children = [json.children[prop]];
     }
   } else if (json[prop] && json[prop].__proto__ != Array.prototype) {
-    children = [children];
+    children = [json[prop]];
   } else {
     children = json[prop];
   }
@@ -167,7 +164,7 @@ var readActionHolder = function(node, into) {
   var prop = node.classList[1];
   if (node.getAttribute('data-child-count') == '1') {
     var obj = domActionToJson(node.firstChild);
-    if (Number(prop) != NaN) {
+    if (!isNaN(prop)) {
       if (!into.hasOwnProperty('children')) {
         into.children = [];
       }
@@ -181,6 +178,7 @@ var readActionHolder = function(node, into) {
       into[prop].push(domActionToJson(node.children[i].lastChild));
     }
   }
+  return into;
 };
 var blankSelect = function(e) {
   var node = jsonActionToDom({tag:e.path[0].value, fromBlank:true}, e.path[1].classList[1]);
@@ -223,10 +221,12 @@ var jsonActionToDom = function(json, pass) {
                'test':['Test',true], 'choose':['Do one of the following:',true], 'when':['If',true], 'otherwise':['Otherwise',true],
                'condition':['Condition',false], 'container':['Container',false], 'sentence':['Sentence',false],
                'value':['Value',false], 'stringvalue':['String Value',false],
-               'action':['Do This:',true],
                'concat':['Concatenate:',false],
                'reject-current-rule':['Quit applying this entire rule and try again',false],
-               'call-macro':['Call macro',false]};
+               'call-macro':['Call macro',false],
+               'rule':['Rule',false], 'pattern':['When you see this:',false], 'action':['Do This:',true],
+               'pattern-item':['',false], 'blank-pattern-item':['',false], 'output-item':['',false],
+               'out':['Output',true]};
   if (basic.hasOwnProperty(json.tag)) {
     var ret = mkel('div', 'act '+pass+' '+json.tag, {innerHTML:'<span>'+basic[json.tag][0]+'</span>'});
     if (basic[json.tag][1]) {
@@ -262,9 +262,6 @@ var jsonActionToDom = function(json, pass) {
       ret.appendChild(txtAttr(json, 'v'));
       ret.appendChild(checkbox('Tags', 'istags', json.istags));
       break;
-    case "not":
-      json.children[0].tag = 'not-'+json.children[0].tag;
-      return jsonActionToDom(json.children[0]);
     case "let":
       ret.appendChild(actionHolder('container', '1', json, 0, pass));
       ret.appendChild(mkel('span', null, {innerText:'to'}));
@@ -275,8 +272,8 @@ var jsonActionToDom = function(json, pass) {
       break;
     case "comp":
       ret.appendChild(actionHolder('value', '1', json, 0, pass));
-      var mode = mkel('select', 'select mode', {innerHTML:'<option value="equal">is exactly</option><option value="begin">starts with</option><option value="end">ends with</option><option value="contains">contains</option><option value="not-equal">isn\'t exactly</option><option value="not-begin">doesn\'t start with</option><option value="not-end">doesn\'t end with</option><option value="not-contains">doesn\'t contain</option>'});
-      var list = mkel('select', 'select islist', {innerHTML:'<option value="value">the value</option><option value="list">something in</option>'});
+      var mode = mkel('select', 'mode', {innerHTML:'<option value="equal">is exactly</option><option value="begin">starts with</option><option value="end">ends with</option><option value="contains">contains</option><option value="not-equal">isn\'t exactly</option><option value="not-begin">doesn\'t start with</option><option value="not-end">doesn\'t end with</option><option value="not-contains">doesn\'t contain</option>'});
+      var list = mkel('select', 'islist', {innerHTML:'<option value="value">the value</option><option value="list">something in</option>'});
       var other = mkel('div', 'place other');
       ret.appendChild(mode);
       ret.appendChild(list);
@@ -323,11 +320,15 @@ var jsonActionToDom = function(json, pass) {
     case "sentence":
     case "value":
     case "stringvalue":
+    case "blank-pattern-item":
+    case "output-item":
       var buttons = {'condition':[['conj','Conjuction'],['comp','Comparison']],
                      'container':[['var','Variable'],['clip','Input Word']],
                      'sentence':['let','out','choose','modify-case','call-macro','append',['reject-current-rule','Quit this rule']],
                      'value':['b','clip','lit','lit-tag','var','get-case-from','case-of','concat','lu','mlu','chunk'],
-                     'stringvalue':['clip','lit','var','get-case-from','case-of']};
+                     'stringvalue':['clip','lit','var','get-case-from','case-of'],
+                     'blank-pattern-item':[['pattern-item','Add Item']],
+                     'output-item':['mlu','lu','b','chunk','var']};
       var b;
       for (var i = 0; i < buttons[json.tag].length; i++) {
         b = buttons[json.tag][i];
@@ -359,6 +360,22 @@ var jsonActionToDom = function(json, pass) {
         ret.appendChild(mkel('button', '', {value:'with-param', innerText:'add parameter', onclick:blankSelect}));
       }
       return ret;
+    case "rule":
+      ret.appendChild(mkel('span', '', {innerText:'Name:'}));
+      ret.appendChild(txtAttr(json, 'comment'));
+      ret.appendChild(commentBox(json));
+      ret.appendChild(actionHolder('pattern', '1', json, 'pattern', pass));
+      ret.appendChild(actionHolder('action', '1', json, 'action', pass));
+      break;
+    case "pattern":
+      ret.appendChild(actionHolder('blank-pattern-item', '!+', json, 'children', pass));
+      break;
+    case "pattern-item":
+      ret.appendChild(chooseGlobal('cats', pass, json.n, 'n'));
+      break;
+    case "out":
+      ret.appendChild(actionHolder('output-item', '!+', json, 'children', pass));
+      break;
     default:
       return defaultDom(json);
   }
@@ -369,7 +386,7 @@ var domActionToJson = function(node) {
   var kids = function(n) {
     var ret = [];
     for (var i = 0; i < n.childNodes.length; i++) {
-      if (n.childNodes[i].tagName != 'SPAN') {
+      if (!['BR', 'SPAN'].includes(n.childNodes[i].tagName)) {
         if (n.childNodes[i].classList[0] == 'place') {
           ret = ret.concat(kids(n.childNodes[i]));
         } else {
@@ -381,11 +398,10 @@ var domActionToJson = function(node) {
   };
   var todo = kids(node);
   var ret = {};
-  console.log(node);
   ret.tag = node.classList[2];
   for (var i = 0; i < todo.length; i++) {
     if (todo[i].classList[0] == 'action-holder') {
-      readActionHolder(todo[i], ret);
+      ret = readActionHolder(todo[i], ret);
     } else if (todo[i].tagName == 'DIV') {
       if (todo[i].classList[0] == 'global') {
         ret[todo[i].classList[1]] = todo[i].children[0].value;
@@ -437,6 +453,7 @@ var reprocessJson = function(json) {
       break;
     case 'comp':
       var not = false;
+      console.log(ret);
       if (ret.mode.startsWith('not-')) {
         not = true;
         ret.mode = ret.mode.slice(4);
@@ -460,17 +477,23 @@ var reprocessJson = function(json) {
           ret.children.push({tag:'with-param', pos:ret.params[i]});
         }
       }
-      ret.params = undefined;
+      delete ret.params;
+      break;
+    case 'rule':
+      ret.children = [ret.pattern, ret.action];
+      delete ret.pattern;
+      delete ret.action;
       break;
   }
   return ret;
 };
 var jsonActionToXml = function(json, indent) {
+  if (!json) { return ''; }
   indent = indent||'';
   var ret = indent+'<'+json.tag;
   var kids = '';
   for (var k in json) {
-    if (k == 'tag' || k == undefined || k == 'undefined') {
+    if (k == 'tag' || k == undefined || k == 'undefined' || json[k] == undefined) {
       continue;
     } else if (k == 'children') {
       for (var i = 0; i < json[k].length; i++) {
@@ -486,32 +509,33 @@ var jsonActionToXml = function(json, indent) {
   return ret+'>'+kids+'</'+json.tag+'>';
 };
 var alltoxml = function() {
-  var nodes = document.getElementsByClassName('action');
   var s = '';
-  for (var i = 0; i < nodes.length; i++) {
-    s += jsonActionToXml(reprocessJson(domActionToJson(nodes[i])), '') + '\n';
+  var parts = ['chunker', 'interchunk', 'postchunk'];
+  for (var p = 0; p < parts.length; p++) {
+    s += '===========================\n'+parts[p]+'\n' +
+         '===========================\n\n';
+    var nodes = document.getElementById(parts[p]).lastChild.children;
+    for (var i = 0; i < nodes.length; i++) {
+      s += jsonActionToXml(reprocessJson(domActionToJson(nodes[i])), '') + '\n';
+    }
+    s += '\n\n\n';
   }
   document.getElementById('final-output').innerText = s;
 };
-var jsonRuleToDom = function(rule, pass) {
-  var ret = mkel('div', 'rule', {innerHTML:'<span class="rule-name">'+rule.comment+'</span><ol></ol>'});
-  for (var i = 0; i < rule.pattern.length; i++) {
-    ret.children[1].innerHTML += '<li>'+rule.pattern[i]+'</li>';
-  }
-  ret.appendChild(jsonActionToDom(rule.action, pass));
-  return ret;
-};
 var setup = function() {
   ch = document.getElementById('chunker');
+  ch.appendChild(mkel('div', 'rule-block'));
   for (var i = 0; i < DATA.chunker.rules.length; i++) {
-    ch.appendChild(jsonRuleToDom(DATA.chunker.rules[i], 'chunker'));
+    ch.lastChild.appendChild(jsonActionToDom(DATA.chunker.rules[i], 'chunker'));
   }
   ch = document.getElementById('interchunk');
+  ch.appendChild(mkel('div', 'rule-block'));
   for (var i = 0; i < DATA.interchunk.rules.length; i++) {
-    ch.appendChild(jsonRuleToDom(DATA.interchunk.rules[i], 'interchunk'));
+    ch.lastChild.appendChild(jsonActionToDom(DATA.interchunk.rules[i], 'interchunk'));
   }
   ch = document.getElementById('postchunk');
+  ch.appendChild(mkel('div', 'rule-block'));
   for (var i = 0; i < DATA.postchunk.rules.length; i++) {
-    ch.appendChild(jsonRuleToDom(DATA.postchunk.rules[i], 'postchunk'));
+    ch.lastChild.appendChild(jsonActionToDom(DATA.postchunk.rules[i], 'postchunk'));
   }
 };
