@@ -33,3 +33,6 @@ span {
 .modify-case > .literal > .istags {
   display: none;
 }
+.mobile > div {
+  display: inline-block;
+}

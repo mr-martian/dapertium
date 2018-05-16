@@ -64,6 +64,17 @@ var addVariable = function(pass) {
 var updateVars = function(pass) {
   // TODO: find all <var>s and update option lists
 };
+var listBox = function(pass) {
+  var s = '';
+  var lists = Object.keys(DATA[pass].lists);
+  lists.sort()
+  for (var i = 0; i < lists.length; i++) {
+    s += '<option value="'+lists[i]+'">'+lists[i]+'</option>';
+  }
+  var ret = mkel('select', 'list');
+  ret.innerHTML = s;
+  return ret;
+};
 var moveUp = function(e) {
   if (e.path[2].previousSibling) {
     e.path[3].insertBefore(e.path[2], e.path[2].previousSibling);
@@ -75,9 +86,9 @@ var moveDown = function(e) {
     e.path[3].insertBefore(e.path[2], e.path[2].nextSibling.nextSibling);
   }
 };
-var holderLi = function(contain, node) {
-  var ret = mkel('li');
-  if (contain[0] == '!') {
+var holderLi = function(count, node) {
+  var ret = mkel('li', 'mobile');
+  if (count[0] == '!') {
     var move = mkel('div', 'reorder', {innerHTML:'<span>↑</span><br><span>↓</span>'});
     move.children[0].onclick = moveUp;
     move.children[2].onclick = moveDown;
@@ -90,15 +101,22 @@ var holderLi = function(contain, node) {
 };
 var actionHolder = function(contain, count, children, pass) {
   var ret;
+  if (children && children.__proto__ != Array.prototype) {
+    children = [children];
+  }
   if (count == '1') {
     ret = mkel('div', 'action-holder');
-    ret.appendChild(jsonActionToDom({tag:contain}, pass));
+    if (children) {
+      ret.appendChild(jsonActionToDom(children[0], pass));
+    } else {
+      ret.appendChild(jsonActionToDom({tag:contain}, pass));
+    }
   } else {
-    ret = mkel((contain[0] == '!' ? 'ol' : 'ul'), 'action-holder');
+    ret = mkel((count[0] == '!' ? 'ol' : 'ul'), 'action-holder');
     if (children) {
       var li;
       for (var i = 0; i < children.length; i++) {
-        ret.appendChild(holderLi(contain, jsonActionToDom(children[i], pass)));
+        ret.appendChild(holderLi(count, jsonActionToDom(children[i], pass)));
       }
     }
     ret.appendChild(holderLi('?', jsonActionToDom({tag:contain}, pass)));
@@ -110,7 +128,7 @@ var actionHolder = function(contain, count, children, pass) {
 var blankSelect = function(e) {
   var node = jsonActionToDom({tag:e.path[0].value}, e.path[1].classList[1]);
   if (e.path[2].tagName == 'LI') {
-    e.path[3].insertBefore(holderLi(e.path[3].getAttribute('data-must-contain'), node), e.path[2]);
+    e.path[3].insertBefore(holderLi(e.path[3].getAttribute('data-child-count'), node), e.path[2]);
   } else {
     e.path[2].replaceChild(node, e.path[1]);
     delete e.path[1];
@@ -138,81 +156,139 @@ var jsonActionToDom = function(json, pass) {
     deleteButton(ret);
     return ret;
   };
+  var basic = {'conj':['conj','',false], 'blank-conj':['conj','',false],
+               'clip':['','Copy',false],
+               'b':['','Space',false],
+               'lit':['literal','Literal',false], 'lit-tag':['literal','Literal',false],
+               'let':['let inline-kids','Set',false],
+               'var':['','Variable',false],
+               'comp':['comp','Check that',false], 'blank-comp':['comp','Check that',false],
+               'test':['','Test',true], 'choose':['','Do one of the following:',true], 'when':['','If',true], 'otherwise':['','Otherwise',true],
+               'condition':['','Condition',false], 'container':['','Container',false], 'sentence':['','Sentence',false],
+               'value':['','Value',false], 'stringvalue':['','String Value',false]};
+  if (basic.hasOwnProperty(json.tag)) {
+    var ret = mkel('div', 'act '+pass+' '+basic[json.tag][0]||json.tag, {innerHTML:'<span>'+basic[json.tag][1]+'</span>'});
+    if (basic[json.tag][2]) {
+      ret.appendChild(commentBox(json));
+    }
+  }
   var divcls = 'act '+pass+' '+json.tag;
   switch (json.tag) {
-    case "and":
-    case "or":
-    case "nand":
-    case "nor":
+    case "b":
+      ret.innerHTML += '<span>(corresponding to the original space after word</span><input type="number" class="pos" title="may be left blank"></input><span style="padding-left:0px;">)</span>';
+      ret.children[2].value = json.pos;
+      break;
+    case "conj":
     case "blank-conj":
-      var ret = mkel('div', 'act '+pass+' conj', {innerHTML:'<select class="conjmode"><option value="blank-conj">----</option><option value="and">All</option><option value="or">Some</option><option value="nand">Not all</option><option value="nor">None</option></select><span>of the following are true:</span><ul class="conj-parts"></ul>'});
-      ret.children[0].value = json.tag;
+      ret.innerHTML = '<select class="conjmode"><option value="blank-conj">----</option><option value="and">All</option><option value="or">Some</option><option value="not-and">Not all</option><option value="not-or">None</option></select><span>of the following are true:</span>';
+      ret.children[0].value = json.mode;
       ret.appendChild(actionHolder('condition', '++', json.children, pass));
-      deleteButton(ret);
-      return ret;
+      break;
     case "clip":
-      var ret = mkel('div', divcls, {innerHTML:'<span>Copy</span><input type="text" class="clip-part"></input><span>of input word</span><input class="pos" type="number" min="1"></input><span>in</span><select class="side"><option value="sl">Source</option><option value="tl">Target</option></select><span>Language</span><br>'});
+      ret.innerHTML += '<input type="text" class="clip-part"></input><span>of input word</span><input class="pos" type="number" min="1"></input><span>in</span><select class="side"><option value="sl">Source</option><option value="tl">Target</option></select><span>Language</span><br>';
       ret.children[1].value = json.part;
       ret.children[3].value = json.pos;
       ret.children[5].value = json.side;
       ret.appendChild(checkbox('Queue', 'queue', json.queue != 'no'));
       ret.appendChild(commentBox(json));
-      deleteButton(ret);
       // TODO: I'm really not sure what the "link-to" attribute does
-      return ret;
+      break;
     case "lit":
     case "lit-tag":
-      var ret = mkel('div', 'act '+pass+' literal', {innerHTML:'<span>Literal</span>'});
       ret.appendChild(txtAttr(json, 'v'));
       ret.appendChild(checkbox('Tags', 'istags', json.tag == 'lit-tag'));
-      deleteButton(ret);
-      return ret;
+      break;
     case "not":
-      if (json.children[0].tag == "and") {
-        json.children[0].tag = "nand";
-        return jsonActionToDom(json.children[0], pass);
-      } else if (json.children[0].tag == "or") {
-        json.children[0].tag = "nor";
-        return jsonActionToDom(json.children[0], pass);
-      } else {
-        return defaultDom(json);
-      }
+      json.children[0].tag = 'not-'+json.children[0].tag;
+      return jsonActionToDom(json.children[0]);
     case "let":
-      var ret = mkel('div', divcls+' inline-kids', {innerHTML:'<span>Set</span>'});
-      ret.appendChild(jsonActionToDom(json.children[0], pass));
+      ret.appendChild(actionHolder('container', '1', (json.children?json.children[0]:null), pass));
       ret.appendChild(mkel('span', null, {innerText:'to'}));
-      ret.appendChild(jsonActionToDom(json.children[1], pass));
-      deleteButton(ret);
-      return ret;
+      ret.appendChild(actionHolder('value', '1', (json.children?json.children[1]:null), pass));
+      break;
     case "var":
       var s = '';
       for (var i = 0; i < DATA[pass].vars.length; i++) {
         s += '<option value="'+DATA[pass].vars[i].n+'">'+DATA[pass].vars[i].n+'</option>';
       }
-      var ret = mkel('div', divcls, {innerHTML:'<span>Variable</span><select>'+s+'<option value="">Create New Variable</option></select>'});
+      ret.innerHTML += '<select>'+s+'<option value="">Create New Variable</option></select>';
       ret.children[1].value = json.n;
       ret.children[1].onchange = function() {
         if (ret.children[1].value == "") {
           addVariable(pass);
         }
       };
-      return ret;
+      break;
+    case "comp":
+    case "blank-comp":
+      ret.appendChild(actionHolder('value', '1', json.children[0], pass));
+      var mode = mkel('select', 'comp-mode', {innerHTML:'<option value="equal">is</option><option value="begin">starts with</option><option value="end">ends with</option><option value="contains">contains</option><option value="not-equal">isn\'t</option><option value="not-begin">doesn\'t start with</option><option value="not-end">doesn\'t end with</option><option value="not-contains">doesn\'t contain</option>'});
+      var list = mkel('select', 'comp-islist', {innerHTML:'<option value="value">the value</option><option value="list">something in</option>'});
+      var other = mkel('div', 'comp-other');
+      ret.appendChild(mode);
+      ret.appendChild(list);
+      ret.appendChild(other);
+      mode.value = json.mode;
+      list.value = json.islist;
+      list.onchange = function(e) {
+        if (mode.value == 'contains' && list.value == 'list') {
+          other.innerHTML = '<span class="error">(substring match from list is not supported)</span>';
+        } else if (list.value == 'list') {
+          other.innerHTML = '';
+          other.appendChild(listBox(pass));
+        } else {
+          other.innerHTML = '';
+          other.appendChild(actionHolder('value', '1', null, pass));
+        }
+      };
+      mode.onchange = list.onchange;
+      if (json.islist == 'list') {
+        other.appendChild(listBox(pass));
+        other.firstChild.value = json.children[1].n;
+      } else {
+        other.appendChild(actionHolder('value', '1', json.children[1], pass));
+      }
+      ret.appendChild(checkbox('Case Sensitive', 'iscased', json.caseless != 'yes'));
+      break;
+    case "test":
+      ret.appendChild(actionHolder('condition', '1', (json.children?json.children[0]:null), pass));
+      break;
+    case "choose":
+      ret.appendChild(actionHolder('when', '!+', json.children, pass));
+      ret.appendChild(actionHolder('otherwise', '1', json.otherwise, pass));
+      break;
+    case "when":
+      ret.appendChild(actionHolder('test', '1', (json.children?json.children[0]:null), pass));
+      ret.appendChild(mkel('span', '', {innerText:'Then'}));
+      ret.appendChild(actionHolder('sentence', '!+', (json.children?json.children.slice(1):null), pass));
+      break;
+    case "otherwise":
+      ret.appendChild(actionHolder('sentence', '!*', json.children, pass));
+      break;
     case "condition":
-      var ret = mkel('div', divcls, {innerHTML:'<span>Condition</span><button value="blank-conj">Conjunction</button><button value="blank-comp">Comparison</button>'});
-      ret.children[1].onclick = blankSelect;
-      ret.children[2].onclick = blankSelect;
-      return ret;
-    /*case "container":
-      break;
+    case "container":
     case "sentence":
-      break;
     case "value":
-      break;
     case "stringvalue":
-      break;*/
+      var buttons = {'condition':[['blank-conj','Conjuction'],['blank-comp','Comparison']],
+                     'container':[['var','Variable'],['clip','Input Word']],
+                     'sentence':['let','out','choose','modify-case','call-macro','append','reject-current-rule'],
+                     'value':['b','clip','lit','lit-tag','var','get-case-from','case-of','concat','lu','mlu','chunk'],
+                     'stringvalue':['clip','lit','var','get-case-from','case-of']};
+      var b;
+      for (var i = 0; i < buttons[json.tag].length; i++) {
+        b = buttons[json.tag][i];
+        if (b.__proto__ != Array.prototype) {
+          b = [b,b];
+        }
+        ret.appendChild(mkel('button', '', {value:b[0], innerText:b[1], onclick:blankSelect}));
+      }
+      break;
     default:
       return defaultDom(json);
   }
+  deleteButton(ret);
+  return ret;
 };
 var domActionToJson = function(node) {
   switch (node.classList[2]) {
