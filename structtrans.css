@@ -1,7 +1,7 @@
 span {
   padding: 5px;
 }
-.inline-kids > .act, .inline, .commentbox, .queue {
+.let > .act, .inline, .commentbox, .queue {
   display: inline-block;
   vertical-align: top;
 }
@@ -35,4 +35,10 @@ span {
 }
 .mobile > div {
   display: inline-block;
+}
+.act ol {
+  padding-left: 15px;
+}
+.global {
+  display: inline;
 }

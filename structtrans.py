@@ -79,6 +79,14 @@ class Action:
         elif self.tag == 'choose':
             if r.children[-1].tag == 'otherwise':
                 r.attrib['otherwise'] = r.children.pop()
+        elif self.tag == 'when':
+            r.attrib['cond'] = r.children.pop(0)
+        elif self.tag == 'lit':
+            r.tag = 'literal'
+            r.attrib['istags'] = False
+        elif self.tag == 'lit-tag':
+            r.tag = 'literal'
+            r.attrib['istags'] = True
         else:
             pass
         return r
@@ -146,6 +154,9 @@ f.write('''<html><head><link rel="stylesheet" href="dapertium/structtrans.css"><
 <div id="interchunk"></div>
 <h1>Postchunk</h1>
 <div id="postchunk"></div>
+<hr/>
+<button onclick="alltoxml();">Export to XML</button>
+<pre id="final-output"></pre>
 <script>setup();</script>
 </body></html>''' % (args.langs, json.dumps(js)))
 f.close()
