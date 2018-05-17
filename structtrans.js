@@ -106,12 +106,10 @@ var listBox = function(pass) {
   return ret;
 };
 var chooseGlobal = function(type, pass, val, cls) {
-  if (type == 'vars') {
-    var lists = DATA[pass].vars.map(function(o) { return o.n; });
-  } else {
-    var lists = Object.keys(DATA[pass][type]);
-  }
-  lists.sort();
+  var mc = {};
+  var ch = document.getElementById(pass).getElementsByClassName(type.slice(0,type.length-1)+'-block');
+  readActionHolder(ch[0].firstChild, mc);
+  var lists = mc.children.map(function(x) { return x.n; });
   var ret = mkel('select', type+' '+pass);
   for (var i = 0; i < lists.length; i++) {
     ret.appendChild(mkel('option', '', {innerText:lists[i], value:lists[i]}));
@@ -746,7 +744,6 @@ var alltoxml = function() {
     document.body.appendChild(mkel('h2', '', {innerText:parts[p]}));
     document.body.appendChild(mkel('textarea', '', {value:s}));
   }
-  //document.getElementById('final-output').innerText = s;
 };
 var setup = function() {
   passes = ['chunker', 'interchunk', 'postchunk'];

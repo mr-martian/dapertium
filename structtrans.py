@@ -166,10 +166,18 @@ js = {'tags':Tags,
       }}
 if 'default' in CH.attrib:
     js['chunker']['default'] = CH.attrib['default']
+import os
+p = os.path.dirname(os.path.realpath(__file__))
+f = open(p+'/structtrans.js')
+script = f.read()
+f.close()
+f = open(p+'/structtrans.css')
+css = f.read()
+f.close()
 f = open(fname, 'w')
 f.write('''<html><head>
 <meta charset="utf-8"/>
-<link rel="stylesheet" href="dapertium/structtrans.css"></link><script src="dapertium/structtrans.js"></script>
+<style>%s</style><script>%s</script>
 <title>Structural Transfer Editor for %s</title>
 <script>var DATA = %s;</script>
 <body>
@@ -185,5 +193,5 @@ f.write('''<html><head>
 <button onclick="alltoxml();">Export to XML</button>
 <pre id="final-output"></pre>
 <script>setup();</script>
-</body></html>''' % (args.langs, json.dumps(js)))
+</body></html>''' % (css, script, args.langs, json.dumps(js)))
 f.close()
