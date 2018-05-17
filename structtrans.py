@@ -122,30 +122,50 @@ for cat in PCH.findall('./section-def-macros/def-macro'):
 Rules1 = [Action.fromxml(x) for x in CH.findall('./section-rules/rule')]
 Rules2 = [Action.fromxml(x) for x in ICH.findall('./section-rules/rule')]
 Rules3 = [Action.fromxml(x) for x in PCH.findall('./section-rules/rule')]
+def struc(c, n):
+    f = c.findall('./section-def-'+n)
+    if f:
+        return Action.fromxml(f[0]).json()
+    else:
+        return Action('section-def-'+n, {}, []).json()
 fname = args.outfile or args.langs + '-struct-trans.html'
 print('Writing to %s' % fname)
 js = {'tags':Tags,
       'chunker':{'cats':Cats1,
+                 'cat-block':struc(CH, 'cats'),
                  'attrs':Attrs1,
+                 'attr-block':struc(CH, 'attrs'),
                  'lists':Lists1,
+                 'list-block':struc(CH, 'lists'),
                  'vars':Vars1,
+                 'var-block':struc(CH, 'vars'),
                  'macros':Macros1,
                  'rules':[x.process().json() for x in Rules1]
       },
       'interchunk':{'cats':Cats2,
+                    'cat-block':struc(ICH, 'cats'),
                     'attrs':Attrs2,
+                    'attr-block':struc(ICH, 'attrs'),
                     'lists':Lists2,
+                    'list-block':struc(ICH, 'lists'),
                     'vars':Vars2,
+                    'var-block':struc(ICH, 'vars'),
                     'macros':Macros2,
                     'rules':[x.process().json() for x in Rules2]
       },
       'postchunk':{'cats':Cats3,
-                  'attrs':Attrs3,
-                  'lists':Lists3,
-                  'vars':Vars3,
-                  'macros':Macros3,
-                  'rules':[x.process().json() for x in Rules3]
+                   'cat-block':struc(PCH, 'cats'),
+                   'attrs':Attrs3,
+                   'attr-block':struc(PCH, 'attrs'),
+                   'lists':Lists3,
+                   'list-block':struc(PCH, 'lists'),
+                   'vars':Vars3,
+                   'var-block':struc(PCH, 'vars'),
+                   'macros':Macros3,
+                   'rules':[x.process().json() for x in Rules3]
       }}
+if 'default' in CH.attrib:
+    js['chunker']['default'] = CH.attrib['default']
 f = open(fname, 'w')
 f.write('''<html><head>
 <meta charset="utf-8"/>
@@ -154,6 +174,8 @@ f.write('''<html><head>
 <script>var DATA = %s;</script>
 <body>
 <h1>Chunker</h1>
+<span>Unmatched words should be output as</span>
+<select id="chunker-default"><option value="lu">Lexical Units</option><option value="chunk">Chunks</option></select>
 <div id="chunker"></div>
 <h1>Interchunk</h1>
 <div id="interchunk"></div>

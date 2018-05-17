@@ -1,9 +1,10 @@
 /*
 TODO:
-vars, lists, attrs, cats
-verify output correctness
-transfer, interchunk, and postchunk are slightly different - incorporate the latter 2
-append, modify-case, mlu, lu, chunk, tags, tag
+Tags:
+  dumping data, haven't formatted:
+    append, modify-case, mlu, lu, chunk, tags, tag
+  varies between t1x/t2x/t3x:
+    out, get-case-from, case-of, chunk, pseudolemma, tags, tag, lu-count, pattern, cat-item
 update dropdowns
 validate
 improve labels?
@@ -246,6 +247,10 @@ var jsonActionToDom = function(json, pass) {
                'pattern-item':['',false], 'blank-pattern-item':['',false], 'output-item':['',false],
                'out':['Output',true],
                'def-macro':['Macro',false],
+               'def-cat':['Category',false], 'blank-def-cat':['',false], 'cat-item':['',false], 'blank-cat-item':['',false],
+               'def-attr':['Attribute',false], 'blank-def-attr':['',false], 'attr-item':['',false], 'blank-attr-item':['',false],
+               'def-var':['Variable',false], 'blank-def-var':['',false],
+               'def-list':['List',false], 'blank-def-list':['',false], 'list-item':['',false], 'blank-list-item':['',false],
                // TODO: these probably need more work
                'append':['append',false], 'get-case-from':['get-case-from',false], 'case-of':['case-of',false], 'modify-case':['modify-case',false],
                'concat':['concat',false], 'mlu':['mlu',false], 'lu':['lu',false], 'chunk':['chunk',true], 'tags':['tags',false], 'tag':['tag',false]};
@@ -266,13 +271,19 @@ var jsonActionToDom = function(json, pass) {
       ret.appendChild(actionHolder('condition', '++', json, 'children', pass));
       break;
     case "clip":
-      ret.innerHTML += '<input type="text" class="clip-part"></input><span>of input word</span><input class="pos" type="number" min="1"></input><span>in</span><select class="side"><option value="sl">Source</option><option value="tl">Target</option></select><span>Language</span><br>';
+      ret.innerHTML += '<input type="text" class="part"></input><span>of input word</span><input class="pos" type="number" min="1"></input>';
       ret.children[1].value = json.part;
       ret.children[3].value = json.pos;
-      ret.children[5].value = json.side;
-      ret.appendChild(checkbox('Queue', 'queue', json.queue != 'no'));
+      if (pass == 'chunker') {
+        ret.appendChild(mkel('span', '', {innerText:'in the'}));
+        ret.appendChild(mkel('select', 'side', {innerHTML:'<option value="sl">Source</option><option value="tl">Target</option>'}));
+        ret.appendChild(mkel('span', '', {innerText:'Language'}));
+        ret.children[5].value = json.side;
+        ret.appendChild(checkbox('Queue', 'queue', json.queue != 'no'));
+        // TODO: I'm really not sure what the "link-to" attribute does
+      }
+      ret.appendChild(mkel('br'));
       ret.appendChild(commentBox(json));
-      // TODO: I'm really not sure what the "link-to" attribute does
       break;
     case "case-of":
       ret.innerHTML += '<input type="text" class="clip-part"></input><span>of input word</span><input class="pos" type="number" min="1"></input><span>in</span><select class="side"><option value="sl">Source</option><option value="tl">Target</option></select><span>Language</span><br>';
@@ -346,18 +357,44 @@ var jsonActionToDom = function(json, pass) {
     case "output-item":
     case "clip-lit-var":
     case "chunk-item":
+    case "blank-def-cat":
+    case "blank-cat-item":
+    case "blank-def-attr":
+    case "blank-attr-item":
+    case "blank-def-var":
+    case "blank-def-list":
+    case "blank-list-item":
       var buttons = {'condition':[['conj','Conjuction'],['comp','Comparison']],
                      'container':[['var','Variable'],['clip','Input Word']],
                      'sentence':['let','out','choose','modify-case','call-macro','append',['reject-current-rule','Quit this rule']],
                      'value':['b','clip','lit','lit-tag','var','get-case-from','case-of','concat','lu','mlu','chunk'],
                      'stringvalue':['clip','lit',['var','Variable'],'get-case-from','case-of'],
-                     'blank-pattern-item':[['pattern-item','Add Item']],
                      'output-item':['mlu','lu','b','chunk',['var','Variable']],
                      'chunk-item':['mlu','lu','b','tags',['var','Variable']],
                      'clip-lit-var':[['clip','Input Word'],['lit','Literal'],['var','Variable']]};
+      if (pass != 'chunker') {
+        buttons.sentence.pop();
+      }
+      if (pass == 'interchunk') {
+        buttons.value.pop();
+        buttons.value.pop();
+        buttons.value.pop();
+        buttons.value.push('chunk');
+        buttons['output-item'] = buttons['output-item'].slice(2);
+        buttons['chunk-item'] = buttons['chunk-item'].slice(2);
+      }
+      if (pass == 'postchunk') {
+        //buttons.value.push('lu-count');
+        //buttons.stringvalue.push('lu-count');
+      }
+      if (json.tag.startsWith('blank-')) {
+        var bls = [[json.tag.slice(6),'Add item']];
+      } else {
+        var bls = buttons[json.tag];
+      }
       var b;
-      for (var i = 0; i < buttons[json.tag].length; i++) {
-        b = buttons[json.tag][i];
+      for (var i = 0; i < bls.length; i++) {
+        b = bls[i];
         if (b.__proto__ != Array.prototype) {
           b = [b,b];
         }
@@ -389,6 +426,10 @@ var jsonActionToDom = function(json, pass) {
     case "rule":
       ret.appendChild(mkel('span', '', {innerText:'Name:'}));
       ret.appendChild(txtAttr(json, 'comment'));
+      if (pass == 'chunker') {
+        ret.appendChild(mkel('span', '', {innerText:'ID:'}));
+        ret.appendChild(txtAttr(json, 'id'));
+      }
       ret.appendChild(commentBox(json));
       ret.appendChild(actionHolder('pattern', '1', json, 'pattern', pass));
       ret.appendChild(actionHolder('action', '1', json, 'action', pass));
@@ -411,6 +452,48 @@ var jsonActionToDom = function(json, pass) {
       ret.appendChild(mkel('span', '', {innerText:'Other comment:'}));
       ret.appendChild(txtAttr(json, 'comment'));
       ret.appendChild(actionHolder('sentence', '!+', json, 'children', pass));
+      break;
+    case "def-cat":
+      ret.appendChild(mkel('span', '', {innerText:'Name:'}));
+      ret.appendChild(txtAttr(json, 'n'));
+      ret.appendChild(commentBox(json));
+      ret.appendChild(actionHolder('blank-cat-item', '+', json, 'children', pass));
+      break;
+    case "cat-item":
+      ret.appendChild(mkel('span', '', {innerText:'Lemma:'}));
+      ret.appendChild(txtAttr(json, 'lemma'));
+      ret.appendChild(mkel('span', '', {innerText:'Tags:'}));
+      ret.appendChild(txtAttr(json, 'tags'));
+      ret.appendChild(commentBox(json));
+      break;
+    case "def-attr":
+      ret.appendChild(mkel('span', '', {innerText:'Name:'}));
+      ret.appendChild(txtAttr(json, 'n'));
+      ret.appendChild(commentBox(json));
+      ret.appendChild(actionHolder('blank-attr-item', '+', json, 'children', pass));
+      break;
+    case "attr-item":
+      ret.appendChild(mkel('span', '', {innerText:'Tags:'}));
+      ret.appendChild(txtAttr(json, 'tags'));
+      ret.appendChild(commentBox(json));
+      break;
+    case "def-var":
+      ret.appendChild(mkel('span', '', {innerText:'Name:'}));
+      ret.appendChild(txtAttr(json, 'n'));
+      ret.appendChild(mkel('span', '', {innerText:'Initial value:'}));
+      ret.appendChild(txtAttr(json, 'v'));
+      ret.appendChild(commentBox(json));
+      break;
+    case "def-list":
+      ret.appendChild(mkel('span', '', {innerText:'Name:'}));
+      ret.appendChild(txtAttr(json, 'n'));
+      ret.appendChild(commentBox(json));
+      ret.appendChild(actionHolder('blank-list-item', '+', json, 'children', pass));
+      break;
+    case "list-item":
+      ret.appendChild(mkel('span', '', {innerText:'Value:'}));
+      ret.appendChild(txtAttr(json, 'v'));
+      ret.appendChild(commentBox(json));
       break;
     // TODO: see if these need more work
     case "append":
@@ -523,7 +606,7 @@ var reprocessJson = function(json) {
     }
   }
   switch (ret.tag) {
-    case 'conj':
+    case 'comp':
       var not = false;
       if (ret.mode.startsWith('not-')) {
         not = true;
@@ -540,7 +623,7 @@ var reprocessJson = function(json) {
         ret = {tag:'not', children:[ret]};
       }
       break;
-    case 'comp':
+    case 'conj':
       var not = false;
       console.log(ret);
       if (ret.mode.startsWith('not-')) {
@@ -586,17 +669,31 @@ var reprocessJson = function(json) {
 };
 var jsonActionToXml = function(json, indent) {
   if (!json) { return ''; }
+  var required = {'def-cat':['n'],'cat-item':['tags'],'def-attr':['n'],'def-var':['n'],'def-list':['n'],'list-item':['v'],'def-macro':['n','npar'],'pattern-item':['n'],'list':['n'],'append':['n'],'call-macro':['n'],'with-param':['pos'],'clip':['pos','part'],'lit':['v'],'lit-tag':['v'],'var':['n'],'get-case-from':['pos'],'case-of':['pos','side','part']};
   indent = indent||'';
   var ret = indent+'<'+json.tag;
   var kids = '';
-  for (var k in json) {
+  var ls = Object.keys(json);
+  if (json.tag == 'lit') { console.log(ls); console.log(json);  }
+  ls.sort();
+  var more = required[json.tag]||[];
+  for (var i = 0; i < more.length; i++) {
+    if (!json[more[i]] || json[more[i]] == '') {
+      json[more[i]] = 1;
+    }
+  }
+  var k;
+  for (var j = 0; j < ls.length; j++) {
+    k = ls[j];
     if (k == 'tag' || k == undefined || k == 'undefined' || json[k] == undefined) {
       continue;
     } else if (k == 'children') {
       for (var i = 0; i < json[k].length; i++) {
         kids += jsonActionToXml(json[k][i], indent+'  ')+'\n';
       }
-    } else {
+    } else if (json[k] == 1) {
+      ret += ' '+k+'=""';
+    } else if (typeof json[k] == 'string' && json[k].length > 0) {
       ret += ' '+k+'="'+json[k]+'"';
     }
   }
@@ -607,31 +704,49 @@ var jsonActionToXml = function(json, indent) {
   }
 };
 var alltoxml = function() {
-  var s = '';
+  var s;
   var parts = ['chunker', 'interchunk', 'postchunk'];
   for (var p = 0; p < parts.length; p++) {
-    s += '===========================\n'+parts[p]+'\n' +
-         '===========================\n\n';
     var xml = {tag:parts[p], children:[]};
     if (p == 0) {
       xml.tag = 'transfer';
     }
     var ch = document.getElementById(parts[p]);
-    // get a value for default somehow
-    // read cats
-    // read attrs
-    // read vars
-    // read lists
+    if (parts[p] == 'chunker') {
+      xml['default'] = document.getElementById('chunker-default').value;
+    }
+    var ct = {tag:'section-def-cats'};
+    readActionHolder(ch.getElementsByClassName('cat-block')[0].firstChild, ct);
+    xml.children.push(ct);
+    var at = {tag:'section-def-attrs'};
+    readActionHolder(ch.getElementsByClassName('attr-block')[0].firstChild, at);
+    if (p || at.children.length) {
+      xml.children.push(at);
+    }
+    var vr = {tag:'section-def-vars'};
+    readActionHolder(ch.getElementsByClassName('var-block')[0].firstChild, vr);
+    if (p || vr.children.length) {
+      xml.children.push(vr);
+    }
+    var ls = {tag:'section-def-lists'};
+    readActionHolder(ch.getElementsByClassName('list-block')[0].firstChild, ls);
+    if (ls.children.length) {
+      xml.children.push(ls);
+    }
     var mc = {tag:'section-def-macros'};
     readActionHolder(ch.getElementsByClassName('macro-block')[0].firstChild, mc);
-    xml.children.push(mc);
+    if (mc.children.length) {
+      xml.children.push(mc);
+    }
     var rls = {};
     readActionHolder(ch.getElementsByClassName('rule-block')[0].firstChild, rls);
     xml.children.push({tag:'section-rules', children:rls.rules});
+    s = '<?xml version="1.0" encoding="UTF-8"?>\n';
     s += jsonActionToXml(reprocessJson(xml), '');
-    s += '\n\n\n';
+    document.body.appendChild(mkel('h2', '', {innerText:parts[p]}));
+    document.body.appendChild(mkel('textarea', '', {value:s}));
   }
-  document.getElementById('final-output').innerText = s;
+  //document.getElementById('final-output').innerText = s;
 };
 var setup = function() {
   passes = ['chunker', 'interchunk', 'postchunk'];
@@ -639,12 +754,16 @@ var setup = function() {
     ch = document.getElementById(passes[p]);
     ch.appendChild(mkel('h3', '', {innerText:'Categories'}));
     ch.appendChild(mkel('div', 'cat-block'));
+    ch.lastChild.appendChild(actionHolder('blank-def-cat', '+', DATA[passes[p]]['cat-block'], 'children', passes[p]));
     ch.appendChild(mkel('h3', '', {innerText:'Attributes'}));
     ch.appendChild(mkel('div', 'attr-block'));
+    ch.lastChild.appendChild(actionHolder('blank-def-attr', '+', DATA[passes[p]]['attr-block'], 'children', passes[p]));
     ch.appendChild(mkel('h3', '', {innerText:'Variables'}));
     ch.appendChild(mkel('div', 'var-block'));
+    ch.lastChild.appendChild(actionHolder('blank-def-var', '+', DATA[passes[p]]['var-block'], 'children', passes[p]));
     ch.appendChild(mkel('h3', '', {innerText:'Lists'}));
     ch.appendChild(mkel('div', 'list-block'));
+    ch.lastChild.appendChild(actionHolder('blank-def-list', '+', DATA[passes[p]]['list-block'], 'children', passes[p]));
     ch.appendChild(mkel('h3', '', {innerText:'Macros'}));
     ch.appendChild(mkel('div', 'macro-block'));
     var ls = Object.keys(DATA[passes[p]].macros);
@@ -654,5 +773,8 @@ var setup = function() {
     ch.appendChild(mkel('h3', '', {innerText:'Rules'}));
     ch.appendChild(mkel('div', 'rule-block'));
     ch.lastChild.appendChild(actionHolder('rule', '+', DATA[passes[p]], 'rules', passes[p]));
+  }
+  if (DATA.chunker.hasOwnProperty('default')) {
+    document.getElementById('chunker-default').value = DATA.chunker['default'];
   }
 };
