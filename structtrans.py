@@ -22,33 +22,6 @@ else:
     PCH = xml.etree.ElementTree.parse(args.postchunkfile).getroot()
     DIX = xml.etree.ElementTree.parse(args.dixfile).getroot()
 
-Tags = {}
-for t in DIX.findall('./sdefs/sdef'):
-    if 'n' in t.attrib:
-        if 'c' in t.attrib:
-            Tags[t.attrib['n']] = t.attrib['c']
-        else:
-            Tags[t.attrib['n']] = None
-def listify(doc, path, alt=None):
-    ret = {}
-    for cat in doc.findall('./section-def-%ss/%s' % (path, alt or 'def-'+path)):
-        ret[cat.attrib['n']] = []
-        for it in cat:
-            ret[cat.attrib['n']].append(it.attrib)
-    return ret
-Cats1 = listify(CH, 'cat')
-Cats2 = listify(ICH, 'cat')
-Cats3 = listify(PCH, 'cat')
-Attrs1 = listify(CH, 'attr')
-Attrs2 = listify(ICH, 'attr')
-Attrs3 = listify(PCH, 'attr')
-Lists1 = listify(CH, 'list', 'list-item')
-Lists2 = listify(ICH, 'list', 'list-item')
-Lists3 = listify(PCH, 'list', 'list-item')
-Vars1 = [v.attrib for v in CH.findall('./section-def-vars/def-var')]
-Vars2 = [v.attrib for v in ICH.findall('./section-def-vars/def-var')]
-Vars3 = [v.attrib for v in PCH.findall('./section-def-vars/def-var')]
-# TODO: macros
 comparison = {'equal': ['equal', 'value'],
               'begins-with': ['begin', 'value'],
               'ends-with': ['end', 'value'],
@@ -110,15 +83,42 @@ class Action:
                 ch.append(c.json())
         ret['children'] = ch
         return ret
-class Rule:
-    def __init__(self, xml):
-        self.pattern = [p.attrib['n'] for p in xml.findall('./pattern/pattern-item')]
-        self.action = Action.fromxml(xml.find('./action'))
-        self.attrib = xml.attrib
-    def json(self):
-        ret = self.attrib
-        ret.update({'tag':'rule', 'pattern':self.pattern, 'action':self.action.process().json()})
-        return ret
+Tags = {}
+for t in DIX.findall('./sdefs/sdef'):
+    if 'n' in t.attrib:
+        if 'c' in t.attrib:
+            Tags[t.attrib['n']] = t.attrib['c']
+        else:
+            Tags[t.attrib['n']] = None
+def listify(doc, path, alt=None):
+    ret = {}
+    for cat in doc.findall('./section-def-%ss/%s' % (path, alt or 'def-'+path)):
+        ret[cat.attrib['n']] = []
+        for it in cat:
+            ret[cat.attrib['n']].append(it.attrib)
+    return ret
+Cats1 = listify(CH, 'cat')
+Cats2 = listify(ICH, 'cat')
+Cats3 = listify(PCH, 'cat')
+Attrs1 = listify(CH, 'attr')
+Attrs2 = listify(ICH, 'attr')
+Attrs3 = listify(PCH, 'attr')
+Lists1 = listify(CH, 'list', 'list-item')
+Lists2 = listify(ICH, 'list', 'list-item')
+Lists3 = listify(PCH, 'list', 'list-item')
+Vars1 = [v.attrib for v in CH.findall('./section-def-vars/def-var')]
+Vars2 = [v.attrib for v in ICH.findall('./section-def-vars/def-var')]
+Vars3 = [v.attrib for v in PCH.findall('./section-def-vars/def-var')]
+Macros1 = {}
+for cat in CH.findall('./section-def-macros/def-macro'):
+    Macros1[cat.attrib['n']] = Action.fromxml(cat).process().json()
+Macros2 = {}
+for cat in ICH.findall('./section-def-macros/def-macro'):
+    Macros2[cat.attrib['n']] = Action.fromxml(cat).process().json()
+Macros3 = {}
+for cat in PCH.findall('./section-def-macros/def-macro'):
+    Macros3[cat.attrib['n']] = Action.fromxml(cat).process().json()
+# TODO: macros
 Rules1 = [Action.fromxml(x) for x in CH.findall('./section-rules/rule')]
 Rules2 = [Action.fromxml(x) for x in ICH.findall('./section-rules/rule')]
 Rules3 = [Action.fromxml(x) for x in PCH.findall('./section-rules/rule')]
@@ -129,28 +129,29 @@ js = {'tags':Tags,
                  'attrs':Attrs1,
                  'lists':Lists1,
                  'vars':Vars1,
-                 #'macros':Macros1,
+                 'macros':Macros1,
                  'rules':[x.process().json() for x in Rules1]
       },
       'interchunk':{'cats':Cats2,
                     'attrs':Attrs2,
                     'lists':Lists2,
                     'vars':Vars2,
-                    #'macros':Macros2,
+                    'macros':Macros2,
                     'rules':[x.process().json() for x in Rules2]
       },
       'postchunk':{'cats':Cats3,
                   'attrs':Attrs3,
                   'lists':Lists3,
                   'vars':Vars3,
-                  #'macros':Macros3,
+                  'macros':Macros3,
                   'rules':[x.process().json() for x in Rules3]
       }}
 f = open(fname, 'w')
-f.write('''<html><head><link rel="stylesheet" href="dapertium/structtrans.css"></link><script src="dapertium/structtrans.js"></script>
+f.write('''<html><head>
+<meta charset="utf-8"/>
+<link rel="stylesheet" href="dapertium/structtrans.css"></link><script src="dapertium/structtrans.js"></script>
 <title>Structural Transfer Editor for %s</title>
 <script>var DATA = %s;</script>
-<meta charset="utf-8"/>
 <body>
 <h1>Chunker</h1>
 <div id="chunker"></div>
